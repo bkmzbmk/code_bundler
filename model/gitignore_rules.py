@@ -130,13 +130,31 @@ class GitignoreRules:
     def is_ignored(self, rel_path: str, is_dir: bool) -> bool:
         """Проверка пути по всем правилам с учётом отрицаний (!).
 
+        Как в git: если проигнорирован любой РОДИТЕЛЬСКИЙ каталог,
+        то путь тоже проигнорирован. Поэтому проверяем не только сам
+        путь, но и каждый его каталог-предок.
+
         Последнее совпавшее правило побеждает (как в git)."""
         rel_path = rel_path.replace("\\", "/").strip("/")
         if not rel_path:
             return False
 
+        segments = rel_path.split("/")
+
+        # Список (подпуть, это_папка?) от корня до самого пути.
+        # Все предки — это папки (is_dir=True), последний сегмент —
+        # это сам путь с его реальным is_dir.
+        prefixes: list[tuple[str, bool]] = []
+        for i in range(1, len(segments) + 1):
+            sub = "/".join(segments[:i])
+            sub_is_dir = True if i < len(segments) else is_dir
+            prefixes.append((sub, sub_is_dir))
+
         ignored = False
-        for rule in self._rules:
-            if rule.matches(rel_path, is_dir):
-                ignored = not rule.negation
+        # Идём по правилам; последнее сработавшее правило (для любого
+        # предка) определяет итог. Это сохраняет семантику отрицаний.
+        for sub, sub_is_dir in prefixes:
+            for rule in self._rules:
+                if rule.matches(sub, sub_is_dir):
+                    ignored = not rule.negation
         return ignored
