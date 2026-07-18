@@ -9,7 +9,7 @@ import os
 
 from config import (
     DEFAULT_IGNORE, CODE_EXTENSIONS, DEFAULT_TOKEN_LIMIT,
-    HISTORY_FILE, HISTORY_MAX_ITEMS,
+    HISTORY_FILE, HISTORY_MAX_ITEMS, DEFAULT_ACTIVE_EXTENSIONS,
 )
 from model.folder_history import FolderHistory
 from model.file_node import FileNode
@@ -30,6 +30,17 @@ class AppModel:
     def __init__(self) -> None:
         self._ignore = IgnoreRules(set(DEFAULT_IGNORE))
         self._scanner = ProjectScanner(self._ignore, CODE_EXTENSIONS)
+
+        # Активные расширения (изменяются пользователем через GUI).
+        # Порядок для отображения храним отдельно (list), а фильтр —
+        # как множество внутри сканера.
+        self._active_extensions: set[str] = {
+            e.lower() for e in DEFAULT_ACTIVE_EXTENSIONS
+        }
+        self._scanner.set_extensions(self._active_extensions)
+        # Все расширения, найденные в текущем проекте (для GUI-списка).
+        self._all_extensions: set[str] = set()
+
         self._token_counter = TokenCounter()
 
         # История открытых папок (персистентная)
@@ -46,6 +57,10 @@ class AppModel:
 
         self.token_limit: int = DEFAULT_TOKEN_LIMIT
 
+        self._all_extensions: set[str] = {
+            e.lower() for e in DEFAULT_ACTIVE_EXTENSIONS
+        }
+
     # ------------------------------------------------------------------
     # Проект
     # ------------------------------------------------------------------
@@ -53,10 +68,19 @@ class AppModel:
     def load_project(self, root_path: str) -> FileNode:
         """Сканирует папку, строит дерево и граф зависимостей."""
         self._root_path = os.path.abspath(root_path)
+
+        # Собираем ВСЕ расширения проекта (для предложения в GUI).
+        found = self._scanner.collect_extensions(self._root_path)
+        # Дефолтные расширения всегда присутствуют в списке выбора,
+        # даже если в проекте их нет (чтобы можно было отметить).
+        self._all_extensions = set(found) | {
+            e.lower() for e in DEFAULT_ACTIVE_EXTENSIONS
+        }
+
+        # Сканируем дерево под активные расширения.
+        self._scanner.set_extensions(self._active_extensions)
         self._root_node = self._scanner.scan(self._root_path)
-        # Граф строится на дереве проекта
         self._graph = DependencyGraph(self._root_node, self._registry)
-        # Успешно загрузили — добавляем/поднимаем в истории
         self._history.add(self._root_path)
         return self._root_node
 
@@ -78,6 +102,32 @@ class AppModel:
 
     def clear_history(self) -> None:
         self._history.clear()
+
+    # ------------------------------------------------------------------
+    # Расширения файлов
+    # ------------------------------------------------------------------
+    def get_all_extensions(self) -> list[str]:
+        """Все расширения проекта + дефолтные, отсортированные."""
+        return sorted(self._all_extensions)
+
+    def get_active_extensions(self) -> set[str]:
+        """Текущий набор активных (отмеченных) расширений."""
+        return set(self._active_extensions)
+
+    def set_active_extensions(self, extensions: set[str]) -> FileNode | None:
+        """Задать активные расширения и пересканировать проект.
+
+        Returns:
+            Новый корневой FileNode (если проект был загружен), иначе None.
+        """
+        self._active_extensions = {e.lower() for e in extensions}
+        if self._root_path is None:
+            return None
+        # Пересканируем дерево и перестроим граф под новый фильтр.
+        self._scanner.set_extensions(self._active_extensions)
+        self._root_node = self._scanner.scan(self._root_path)
+        self._graph = DependencyGraph(self._root_node, self._registry)
+        return self._root_node
 
     # ------------------------------------------------------------------
     # Зависимости (Этап 2)

@@ -97,3 +97,18 @@ class IView(ABC):
     def show_history(self, folders: list[str]) -> None:
         """Отобразить список недавних папок (свежая — первой)."""
         raise NotImplementedError
+
+    # --- Расширения файлов ---
+    @abstractmethod
+    def set_on_extensions_changed(
+        self, callback: Callable[[set[str]], None]
+    ) -> None:
+        """callback(active_extensions) — пользователь изменил набор."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def show_extensions(
+        self, all_extensions: list[str], active: set[str]
+    ) -> None:
+        """Показать список расширений с отметками active."""
+        raise NotImplementedError

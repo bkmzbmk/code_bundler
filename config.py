@@ -14,6 +14,12 @@ PYTHON_EXTENSIONS = {".py", ".pyw"}
 # Все поддерживаемые расширения кода
 CODE_EXTENSIONS = CPP_EXTENSIONS | PYTHON_EXTENSIONS
 
+# Порядок расширений для отображения в GUI (по умолчанию все включены)
+DEFAULT_ACTIVE_EXTENSIONS = (
+    ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hxx", ".hh",
+    ".py", ".pyw",
+)
+
 # --- Игнорируемые папки/файлы по умолчанию ---
 DEFAULT_IGNORE = {
     "build", "cmake-build-debug", "cmake-build-release",

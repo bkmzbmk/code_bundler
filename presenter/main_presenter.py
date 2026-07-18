@@ -18,6 +18,8 @@ class MainPresenter:
         self._view.set_token_limit(self._model.token_limit)
         # Показать историю недавних папок при запуске
         self._refresh_history()
+        self._refresh_extensions()   # показать дефолтные расширения сразу
+
 
     def _bind_events(self) -> None:
         self._view.set_on_choose_folder(self.on_choose_folder)
@@ -25,6 +27,7 @@ class MainPresenter:
         self._view.set_on_build(self.on_build)
         self._view.set_on_copy(self.on_copy)
         self._view.set_on_history_open(self.on_history_open)
+        self._view.set_on_extensions_changed(self.on_extensions_changed)
 
     # ------------------------------------------------------------------
     def on_choose_folder(self, path: str) -> None:
@@ -32,11 +35,12 @@ class MainPresenter:
             self._view.show_status("Сканирую проект...")
             root = self._model.load_project(path)
             self._view.show_tree(root)
+            self._refresh_extensions()   # <-- показать расширения проекта
             file_count = sum(1 for _ in root.iter_files())
             self._view.show_status(
                 f"Проект загружен. Файлов кода: {file_count}"
             )
-            self._refresh_history()   # <-- добавлено
+            self._refresh_history()
         except Exception as e:  # noqa: BLE001
             self._view.show_error(f"Не удалось загрузить проект:\n{e}")
             self._view.show_status("Ошибка загрузки проекта")
@@ -122,3 +126,27 @@ class MainPresenter:
     def _refresh_history(self) -> None:
         """Обновить список истории в View."""
         self._view.show_history(self._model.get_folder_history())
+
+    # ------------------------------------------------------------------
+    def on_extensions_changed(self, active: set[str]) -> None:
+        """Пользователь изменил набор расширений — пересканировать."""
+        try:
+            self._view.show_status("Применяю фильтр расширений...")
+            root = self._model.set_active_extensions(active)
+            if root is not None:
+                self._view.show_tree(root)
+                file_count = sum(1 for _ in root.iter_files())
+                self._view.show_status(
+                    f"Файлов после фильтра: {file_count}"
+                )
+            else:
+                self._view.show_status("Проект не загружен")
+        except Exception as e:  # noqa: BLE001
+            self._view.show_error(f"Ошибка применения фильтра:\n{e}")
+
+    def _refresh_extensions(self) -> None:
+        """Обновить список расширений в View."""
+        self._view.show_extensions(
+            self._model.get_all_extensions(),
+            self._model.get_active_extensions(),
+        )

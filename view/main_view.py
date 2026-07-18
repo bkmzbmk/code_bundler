@@ -29,6 +29,10 @@ class MainView(tk.Frame, IView):
         # Индекс строки Listbox -> абсолютный путь папки
         self._history_paths: list[str] = []
 
+        self._on_extensions_changed: Callable[[set[str]], None] | None = None
+        # Чекбоксы расширений: ext -> BooleanVar
+        self._ext_vars: dict[str, tk.BooleanVar] = {}
+
         # item_id -> FileNode
         self._node_by_item: dict[str, FileNode] = {}
         # item_id -> checked(bool)
@@ -39,6 +43,8 @@ class MainView(tk.Frame, IView):
         self._last_token_exact: bool = False
 
         self._build_widgets()
+
+
 
     # ==================================================================
     # Построение интерфейса
@@ -85,6 +91,35 @@ class MainView(tk.Frame, IView):
 
         tree_frame = tk.Frame(left)
         tree_frame.pack(fill="both", expand=True)
+
+        # --- Список расширений (фильтр файлов) ---
+        ext_frame = tk.LabelFrame(left, text="Расширения "
+                                            "(отметьте нужные)")
+        ext_frame.pack(fill="x", pady=(5, 0))
+
+        ext_inner = tk.Frame(ext_frame)
+        ext_inner.pack(fill="both", expand=True, padx=3, pady=3)
+
+        # Canvas + Scrollbar для прокрутки чекбоксов расширений
+        self._ext_canvas = tk.Canvas(ext_inner, height=110,
+                                     highlightthickness=0)
+        ext_scroll = ttk.Scrollbar(ext_inner, orient="vertical",
+                                   command=self._ext_canvas.yview)
+        self._ext_canvas.configure(yscrollcommand=ext_scroll.set)
+        self._ext_canvas.pack(side="left", fill="both", expand=True)
+        ext_scroll.pack(side="right", fill="y")
+
+        # Внутренний фрейм, где лежат чекбоксы
+        self._ext_container = tk.Frame(self._ext_canvas)
+        self._ext_window = self._ext_canvas.create_window(
+            (0, 0), window=self._ext_container, anchor="nw"
+        )
+        self._ext_container.bind(
+            "<Configure>",
+            lambda e: self._ext_canvas.configure(
+                scrollregion=self._ext_canvas.bbox("all")
+            ),
+        )
 
         self._tree = ttk.Treeview(tree_frame, show="tree", selectmode="none")
         scroll = ttk.Scrollbar(tree_frame, orient="vertical",
@@ -220,6 +255,14 @@ class MainView(tk.Frame, IView):
         self._toggle_item(item)
         return "break"
 
+    def _on_ext_toggle(self) -> None:
+        """Любой чекбокс расширения изменён — уведомить Presenter."""
+        if self._on_extensions_changed:
+            self._on_extensions_changed(self._collect_active_extensions())
+
+    def _collect_active_extensions(self) -> set[str]:
+        return {ext for ext, var in self._ext_vars.items() if var.get()}
+
     # ==================================================================
     # Логика чекбоксов (только визуальная часть)
     # ==================================================================
@@ -303,6 +346,36 @@ class MainView(tk.Frame, IView):
                 while parent:
                     self._tree.item(parent, open=True)
                     parent = self._tree.parent(parent)
+
+    # --- расширения ---
+    def set_on_extensions_changed(
+        self, callback: Callable[[set[str]], None]
+    ) -> None:
+        self._on_extensions_changed = callback
+
+    def show_extensions(
+        self, all_extensions: list[str], active: set[str]
+    ) -> None:
+        """Перерисовать список расширений с чекбоксами."""
+        # Очистить старые чекбоксы
+        for child in self._ext_container.winfo_children():
+            child.destroy()
+        self._ext_vars.clear()
+
+        active_norm = {e.lower() for e in active}
+        for ext in all_extensions:
+            var = tk.BooleanVar(value=ext.lower() in active_norm)
+            self._ext_vars[ext] = var
+            tk.Checkbutton(
+                self._ext_container, text=ext, variable=var,
+                anchor="w", command=self._on_ext_toggle,
+            ).pack(fill="x", anchor="w")
+
+        # Обновить область прокрутки
+        self._ext_container.update_idletasks()
+        self._ext_canvas.configure(
+            scrollregion=self._ext_canvas.bbox("all")
+        )
 
     # --- параметры ---
     def get_max_depth(self) -> int:
