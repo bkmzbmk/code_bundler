@@ -81,3 +81,54 @@ def test_clear(tmp_path):
     h.add(str(tmp_path / "a"))
     h.clear()
     assert h.is_empty()
+
+"""Дополнение: невалидный JSON, пустые пути, битый файл."""
+import os
+
+from model.folder_history import FolderHistory
+
+
+def test_load_invalid_json(tmp_path):
+    store = tmp_path / "bad.json"
+    store.write_text("{ this is not json ]", encoding="utf-8")
+    h = FolderHistory(str(store))
+    # Битый файл -> пустая история, без исключений
+    assert h.is_empty()
+
+
+def test_load_non_dict_json(tmp_path):
+    store = tmp_path / "arr.json"
+    store.write_text('["a", "b"]', encoding="utf-8")
+    h = FolderHistory(str(store))
+    # Не dict -> пусто
+    assert h.is_empty()
+
+
+def test_add_empty_path_ignored(tmp_path):
+    h = FolderHistory(str(tmp_path / "h.json"))
+    h.add("")
+    h.add("   ")
+    assert h.is_empty()
+
+
+def test_remove_nonexistent_noop(tmp_path):
+    h = FolderHistory(str(tmp_path / "h.json"))
+    a = str(tmp_path / "a")
+    h.add(a)
+    h.remove(str(tmp_path / "nope"))   # нет такого — не падаем
+    assert len(h.get_all()) == 1
+
+
+def test_load_missing_file(tmp_path):
+    # Файла нет -> пустая история
+    h = FolderHistory(str(tmp_path / "absent.json"))
+    assert h.is_empty()
+
+
+def test_get_all_returns_copy(tmp_path):
+    h = FolderHistory(str(tmp_path / "h.json"))
+    h.add(str(tmp_path / "a"))
+    lst = h.get_all()
+    lst.append("mutated")
+    # Мутация копии не влияет на внутреннее состояние
+    assert len(h.get_all()) == 1
