@@ -24,6 +24,7 @@ class MainView(tk.Frame, IView):
         self._on_resolve_deps: Callable[[], None] | None = None
         self._on_build: Callable[[], None] | None = None
         self._on_copy: Callable[[], None] | None = None
+        self._on_save_to_file: Callable[[], None] | None = None
 
         self._on_history_open: Callable[[str], None] | None = None
         # Индекс строки Listbox -> абсолютный путь папки
@@ -186,6 +187,8 @@ class MainView(tk.Frame, IView):
                   command=self._build_clicked).pack(side="left", padx=5)
         tk.Button(actions, text="Копировать",
                   command=self._copy_clicked).pack(side="left")
+        tk.Button(actions, text="Сохранить в файл",
+                  command=self._save_clicked).pack(side="left", padx=5)
 
         # Счётчик токенов
         self._token_label = tk.Label(right, text="Токенов: —", anchor="w")
@@ -231,6 +234,10 @@ class MainView(tk.Frame, IView):
     def _copy_clicked(self) -> None:
         if self._on_copy:
             self._on_copy()
+
+    def _save_clicked(self) -> None:
+        if self._on_save_to_file:
+            self._on_save_to_file()
 
     def _on_history_double_click(self, _event: tk.Event) -> None:
         """Двойной клик по строке истории — открыть выбранную папку."""
@@ -350,6 +357,9 @@ class MainView(tk.Frame, IView):
 
     def set_on_copy(self, callback: Callable[[], None]) -> None:
         self._on_copy = callback
+
+    def set_on_save_to_file(self, callback: Callable[[], None]) -> None:
+        self._on_save_to_file = callback
 
     # --- дерево ---
     def show_tree(self, root_node: FileNode) -> None:
@@ -495,6 +505,18 @@ class MainView(tk.Frame, IView):
     def copy_to_clipboard(self, text: str) -> None:
         self.clipboard_clear()
         self.clipboard_append(text)
+
+    def ask_save_path(self, default_name: str) -> str | None:
+        """Диалог 'Сохранить как'. Возвращает путь или None."""
+        path = filedialog.asksaveasfilename(
+            title="Сохранить bundle в файл",
+            defaultextension=".txt",
+            initialfile=default_name,
+            filetypes=[("Текстовый файл", "*.txt"),
+                       ("Все файлы", "*.*")],
+        )
+        # asksaveasfilename возвращает "" при отмене
+        return path or None
 
     # --- история папок ---
     def set_on_history_open(self, callback: Callable[[str], None]) -> None:

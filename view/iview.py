@@ -112,3 +112,16 @@ class IView(ABC):
     ) -> None:
         """Показать список расширений с отметками active."""
         raise NotImplementedError
+
+    @abstractmethod
+    def set_on_save_to_file(self, callback: Callable[[], None]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def ask_save_path(self, default_name: str) -> str | None:
+        """Диалог выбора файла для сохранения.
+
+        Returns:
+            Выбранный путь или None, если пользователь отменил.
+        """
+        raise NotImplementedError

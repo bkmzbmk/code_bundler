@@ -19,7 +19,7 @@ class MainPresenter:
         # Показать историю недавних папок при запуске
         self._refresh_history()
         self._refresh_extensions()   # показать дефолтные расширения сразу
-
+        self._view.set_on_save_to_file(self.on_save_to_file)
 
     def _bind_events(self) -> None:
         self._view.set_on_choose_folder(self.on_choose_folder)
@@ -150,3 +150,23 @@ class MainPresenter:
             self._model.get_all_extensions(),
             self._model.get_active_extensions(),
         )
+
+    # ------------------------------------------------------------------
+    def on_save_to_file(self) -> None:
+        text = self._last_bundle or self._view.get_preview_text()
+        if not text.strip():
+            self._view.show_error(
+                "Нечего сохранять — сначала соберите."
+            )
+            return
+        default_name = self._model.suggest_filename()
+        path = self._view.ask_save_path(default_name)
+        if not path:
+            self._view.show_status("Сохранение отменено")
+            return
+        try:
+            self._model.save_to_file(path, text)
+            self._view.show_status(f"Сохранено: {path}")
+        except OSError as e:
+            self._view.show_error(f"Не удалось сохранить файл:\n{e}")
+            self._view.show_status("Ошибка сохранения")

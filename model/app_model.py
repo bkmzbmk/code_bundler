@@ -23,6 +23,8 @@ from model.analyzers.cpp_analyzer import CppAnalyzer
 from model.analyzers.python_analyzer import PythonAnalyzer
 from model.dependency_graph import DependencyGraph
 
+from datetime import datetime
+
 
 class AppModel:
     """Фасад Model. Прячет внутренние классы за простыми методами."""
@@ -198,3 +200,40 @@ class AppModel:
 
     def tokens_available(self) -> bool:
         return self._token_counter.is_available()
+
+    # ------------------------------------------------------------------
+    # Сохранение в файл
+    # ------------------------------------------------------------------
+    def suggest_filename(self) -> str:
+        """Имя файла по умолчанию: <имя_папки>_<дата_время>.txt.
+
+        Если проект не загружен — используем 'bundle'."""
+        if self._root_path:
+            folder_name = os.path.basename(self._root_path.rstrip(os.sep))
+        else:
+            folder_name = "bundle"
+        if not folder_name:  # на случай корня диска ("C:\")
+            folder_name = "bundle"
+
+        # Чистим имя папки от символов, недопустимых в имени файла.
+        folder_name = self._sanitize_filename(folder_name)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        return f"{folder_name}_{timestamp}.txt"
+
+    def save_to_file(self, path: str, text: str) -> None:
+        """Записывает текст в файл (UTF-8). Гарантирует расширение .txt."""
+        if not path:
+            raise ValueError("Не указан путь для сохранения.")
+        # Если пользователь стёр расширение — добавим .txt
+        if not os.path.splitext(path)[1]:
+            path = path + ".txt"
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+
+    @staticmethod
+    def _sanitize_filename(name: str) -> str:
+        """Убирает символы, недопустимые в именах файлов Windows."""
+        invalid = '<>:"/\\|?*'
+        cleaned = "".join("_" if ch in invalid else ch for ch in name)
+        return cleaned.strip() or "bundle"
