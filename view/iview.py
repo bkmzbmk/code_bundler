@@ -5,8 +5,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from tqdm import tk
-
 from model.file_node import FileNode
 
 
@@ -50,28 +48,6 @@ class IView(ABC):
     @abstractmethod
     def get_max_depth(self) -> int:
         raise NotImplementedError
-
-    def _on_token_limit_changed(self, *_args) -> None:
-        """Пользователь поменял лимит — перерисуем индикатор,
-        если есть последний подсчёт токенов."""
-        if self._last_token_count is None:
-            return
-        try:
-            limit = int(self._token_limit_var.get())
-        except (tk.TclError, ValueError):
-            return
-        self._render_token_label(
-            self._last_token_count, limit, self._last_token_exact
-        )
-
-    def get_token_limit(self) -> int:
-        try:
-            return int(self._token_limit_var.get())
-        except (tk.TclError, ValueError):
-            return 0
-
-    def set_token_limit(self, limit: int) -> None:
-        self._token_limit_var.set(limit)
 
     @abstractmethod
     def get_token_limit(self) -> int:
