@@ -90,6 +90,15 @@ class MainView(tk.Frame, IView):
         tk.Label(left, text="Файлы проекта "
                             "(клик — отметить/снять):").pack(anchor="w")
 
+        # Кнопки массового выделения
+        select_bar = tk.Frame(left)
+        select_bar.pack(fill="x", pady=(0, 3))
+        tk.Button(select_bar, text="Выделить всё",
+                  command=self._select_all_clicked).pack(side="left")
+        tk.Button(select_bar, text="Снять выделение",
+                  command=self._deselect_all_clicked).pack(side="left",
+                                                           padx=5)
+
         tree_frame = tk.Frame(left)
         tree_frame.pack(fill="both", expand=True)
 
@@ -272,6 +281,12 @@ class MainView(tk.Frame, IView):
         self._toggle_item(item)
         return "break"
 
+    def _select_all_clicked(self) -> None:
+        self._set_all_items(True)
+
+    def _deselect_all_clicked(self) -> None:
+        self._set_all_items(False)
+
     def _on_ext_toggle(self) -> None:
         """Любой чекбокс расширения изменён — уведомить Presenter."""
         if self._on_extensions_changed:
@@ -326,6 +341,14 @@ class MainView(tk.Frame, IView):
         new_state = not self._checked.get(item, False)
         self._set_item_state(item, new_state)
 
+    def _set_all_items(self, state: bool) -> None:
+        """Проставить/снять отметку у всех узлов дерева.
+
+        Идём по корневым узлам; _set_item_state каскадно
+        обрабатывает вложенные (папки -> файлы)."""
+        for item in self._tree.get_children(""):
+            self._set_item_state(item, state)
+            
     def _set_item_state(self, item: str, state: bool) -> None:
         node = self._node_by_item.get(item)
         self._checked[item] = state
