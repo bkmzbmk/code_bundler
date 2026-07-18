@@ -1,6 +1,8 @@
 """Константы проекта Code Bundler.
 Все настраиваемые значения (метки, лимиты, расширения) — здесь."""
 
+import os
+
 # --- Шаблоны меток файлов (ЗАФИКСИРОВАНЫ) ---
 FILE_START_TEMPLATE = "// ===== FILE START: {path} ====="
 FILE_END_TEMPLATE = "// ===== FILE END: {path} ====="
@@ -30,3 +32,11 @@ FALLBACK_CHARS_PER_TOKEN = 4
 
 # --- Кодировки для чтения файлов (пробуем по порядку) ---
 FILE_ENCODINGS = ("utf-8", "utf-8-sig", "cp1251", "latin-1")
+
+# --- История открытых папок ---
+# Файл истории кладём рядом с приложением (в корне проекта).
+HISTORY_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    ".code_bundler_history.json",
+)
+HISTORY_MAX_ITEMS = 20

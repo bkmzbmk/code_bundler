@@ -16,12 +16,15 @@ class MainPresenter:
         self._bind_events()
         # Проставляем в View лимит токенов из Model
         self._view.set_token_limit(self._model.token_limit)
+        # Показать историю недавних папок при запуске
+        self._refresh_history()
 
     def _bind_events(self) -> None:
         self._view.set_on_choose_folder(self.on_choose_folder)
         self._view.set_on_resolve_deps(self.on_resolve_deps)
         self._view.set_on_build(self.on_build)
         self._view.set_on_copy(self.on_copy)
+        self._view.set_on_history_open(self.on_history_open)
 
     # ------------------------------------------------------------------
     def on_choose_folder(self, path: str) -> None:
@@ -33,6 +36,7 @@ class MainPresenter:
             self._view.show_status(
                 f"Проект загружен. Файлов кода: {file_count}"
             )
+            self._refresh_history()   # <-- добавлено
         except Exception as e:  # noqa: BLE001
             self._view.show_error(f"Не удалось загрузить проект:\n{e}")
             self._view.show_status("Ошибка загрузки проекта")
@@ -99,3 +103,22 @@ class MainPresenter:
             return
         self._view.copy_to_clipboard(text)
         self._view.show_status("Скопировано в буфер обмена")
+
+    # ------------------------------------------------------------------
+    def on_history_open(self, path: str) -> None:
+        """Двойной клик по истории: открыть папку и поднять её наверх."""
+        import os
+        if not os.path.isdir(path):
+            self._view.show_error(
+                f"Папка недоступна (удалена или перемещена?):\n{path}"
+            )
+            self._model.remove_from_history(path)
+            self._refresh_history()
+            return
+        # Переиспользуем обычную загрузку: load_project сам поднимет
+        # папку наверх истории (history.add).
+        self.on_choose_folder(path)
+
+    def _refresh_history(self) -> None:
+        """Обновить список истории в View."""
+        self._view.show_history(self._model.get_folder_history())

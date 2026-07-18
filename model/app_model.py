@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import os
 
-from config import DEFAULT_IGNORE, CODE_EXTENSIONS, DEFAULT_TOKEN_LIMIT
+from config import (
+    DEFAULT_IGNORE, CODE_EXTENSIONS, DEFAULT_TOKEN_LIMIT,
+    HISTORY_FILE, HISTORY_MAX_ITEMS,
+)
+from model.folder_history import FolderHistory
 from model.file_node import FileNode
 from model.ignore_rules import IgnoreRules
 from model.project_scanner import ProjectScanner
@@ -28,6 +32,9 @@ class AppModel:
         self._scanner = ProjectScanner(self._ignore, CODE_EXTENSIONS)
         self._token_counter = TokenCounter()
 
+        # История открытых папок (персистентная)
+        self._history = FolderHistory(HISTORY_FILE, HISTORY_MAX_ITEMS)
+
         # Реестр анализаторов (расширяемо: добавить язык — register)
         self._registry = AnalyzerRegistry()
         self._registry.register(CppAnalyzer())
@@ -42,12 +49,15 @@ class AppModel:
     # ------------------------------------------------------------------
     # Проект
     # ------------------------------------------------------------------
+
     def load_project(self, root_path: str) -> FileNode:
         """Сканирует папку, строит дерево и граф зависимостей."""
         self._root_path = os.path.abspath(root_path)
         self._root_node = self._scanner.scan(self._root_path)
         # Граф строится на дереве проекта
         self._graph = DependencyGraph(self._root_node, self._registry)
+        # Успешно загрузили — добавляем/поднимаем в истории
+        self._history.add(self._root_path)
         return self._root_node
 
     def get_root_node(self) -> FileNode | None:
@@ -55,6 +65,19 @@ class AppModel:
 
     def get_root_path(self) -> str | None:
         return self._root_path
+
+    # ------------------------------------------------------------------
+    # История папок
+    # ------------------------------------------------------------------
+    def get_folder_history(self) -> list[str]:
+        """Список недавних папок (свежая — первой)."""
+        return self._history.get_all()
+
+    def remove_from_history(self, path: str) -> None:
+        self._history.remove(path)
+
+    def clear_history(self) -> None:
+        self._history.clear()
 
     # ------------------------------------------------------------------
     # Зависимости (Этап 2)

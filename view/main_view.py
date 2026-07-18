@@ -25,6 +25,10 @@ class MainView(tk.Frame, IView):
         self._on_build: Callable[[], None] | None = None
         self._on_copy: Callable[[], None] | None = None
 
+        self._on_history_open: Callable[[str], None] | None = None
+        # Индекс строки Listbox -> абсолютный путь папки
+        self._history_paths: list[str] = []
+
         # item_id -> FileNode
         self._node_by_item: dict[str, FileNode] = {}
         # item_id -> checked(bool)
@@ -49,6 +53,24 @@ class MainView(tk.Frame, IView):
         self._folder_label = tk.Label(top, text="(папка не выбрана)",
                                       anchor="w")
         self._folder_label.pack(side="left", padx=10, fill="x", expand=True)
+
+        # --- Панель истории открытых папок ---
+        history_frame = tk.LabelFrame(self, text="Недавние папки "
+                                                 "(двойной клик — открыть)")
+        history_frame.pack(fill="x", padx=5, pady=(0, 5))
+
+        hist_inner = tk.Frame(history_frame)
+        hist_inner.pack(fill="x", padx=3, pady=3)
+
+        self._history_list = tk.Listbox(hist_inner, height=4,
+                                        activestyle="dotbox")
+        hist_scroll = ttk.Scrollbar(hist_inner, orient="vertical",
+                                    command=self._history_list.yview)
+        self._history_list.configure(yscrollcommand=hist_scroll.set)
+        self._history_list.pack(side="left", fill="x", expand=True)
+        hist_scroll.pack(side="right", fill="y")
+        self._history_list.bind("<Double-Button-1>",
+                                self._on_history_double_click)
 
         # --- Основная область: слева дерево, справа предпросмотр ---
         paned = tk.PanedWindow(self, orient="horizontal", sashwidth=5)
@@ -164,6 +186,17 @@ class MainView(tk.Frame, IView):
     def _copy_clicked(self) -> None:
         if self._on_copy:
             self._on_copy()
+
+    def _on_history_double_click(self, _event: tk.Event) -> None:
+        """Двойной клик по строке истории — открыть выбранную папку."""
+        selection = self._history_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if 0 <= index < len(self._history_paths):
+            path = self._history_paths[index]
+            if self._on_history_open:
+                self._on_history_open(path)
 
     def _on_tree_click(self, event: tk.Event) -> None:
         """Обработка клика по дереву.
@@ -340,3 +373,14 @@ class MainView(tk.Frame, IView):
     def copy_to_clipboard(self, text: str) -> None:
         self.clipboard_clear()
         self.clipboard_append(text)
+
+    # --- история папок ---
+    def set_on_history_open(self, callback: Callable[[str], None]) -> None:
+        self._on_history_open = callback
+
+    def show_history(self, folders: list[str]) -> None:
+        """Перерисовать список истории (folders: свежая — первой)."""
+        self._history_paths = list(folders)
+        self._history_list.delete(0, "end")
+        for path in self._history_paths:
+            self._history_list.insert("end", path)

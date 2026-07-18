@@ -86,3 +86,14 @@ class IView(ABC):
     @abstractmethod
     def copy_to_clipboard(self, text: str) -> None:
         raise NotImplementedError
+
+    # --- История папок ---
+    @abstractmethod
+    def set_on_history_open(self, callback: Callable[[str], None]) -> None:
+        """callback(folder_path) — двойной клик по строке истории."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def show_history(self, folders: list[str]) -> None:
+        """Отобразить список недавних папок (свежая — первой)."""
+        raise NotImplementedError
