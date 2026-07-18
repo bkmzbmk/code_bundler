@@ -114,12 +114,22 @@ class MainView(tk.Frame, IView):
         self._ext_window = self._ext_canvas.create_window(
             (0, 0), window=self._ext_container, anchor="nw"
         )
+
         self._ext_container.bind(
             "<Configure>",
             lambda e: self._ext_canvas.configure(
                 scrollregion=self._ext_canvas.bbox("all")
             ),
         )
+
+        # --- Прокрутка колёсиком мыши ---
+        # Колёсико приходит в виджет под курсором (Checkbutton), поэтому
+        # включаем прокрутку при входе курсора в область списка и
+        # выключаем при выходе (чтобы не перехватывать чужую прокрутку).
+        self._ext_canvas.bind("<Enter>", self._bind_ext_mousewheel)
+        self._ext_canvas.bind("<Leave>", self._unbind_ext_mousewheel)
+        self._ext_container.bind("<Enter>", self._bind_ext_mousewheel)
+        self._ext_container.bind("<Leave>", self._unbind_ext_mousewheel)
 
         self._tree = ttk.Treeview(tree_frame, show="tree", selectmode="none")
         scroll = ttk.Scrollbar(tree_frame, orient="vertical",
@@ -259,6 +269,45 @@ class MainView(tk.Frame, IView):
         """Любой чекбокс расширения изменён — уведомить Presenter."""
         if self._on_extensions_changed:
             self._on_extensions_changed(self._collect_active_extensions())
+
+    # ------------------------------------------------------------------
+    # Прокрутка списка расширений колёсиком мыши
+    # ------------------------------------------------------------------
+    def _bind_ext_mousewheel(self, _event: tk.Event | None = None) -> None:
+        """Курсор вошёл в список — включаем прокрутку колёсиком.
+
+        Привязываем на уровне всего приложения (bind_all), т.к. событие
+        колёсика приходит в виджет под курсором (Checkbutton), а не в
+        Canvas. При выходе — отвязываем (_unbind_ext_mousewheel)."""
+        # Windows и macOS
+        self._ext_canvas.bind_all("<MouseWheel>", self._on_ext_mousewheel)
+        # Linux (X11): отдельные кнопки колеса
+        self._ext_canvas.bind_all("<Button-4>", self._on_ext_mousewheel)
+        self._ext_canvas.bind_all("<Button-5>", self._on_ext_mousewheel)
+
+    def _unbind_ext_mousewheel(self, _event: tk.Event | None = None) -> None:
+        """Курсор покинул список — снимаем привязки колёсика."""
+        self._ext_canvas.unbind_all("<MouseWheel>")
+        self._ext_canvas.unbind_all("<Button-4>")
+        self._ext_canvas.unbind_all("<Button-5>")
+
+    def _on_ext_mousewheel(self, event: tk.Event) -> str:
+        """Прокрутка канваса расширений колёсиком.
+
+        Кроссплатформенно:
+          - Windows: event.delta кратно 120 (знак — направление);
+          - macOS:   event.delta небольшие целые (знак — направление);
+          - Linux:   event.num == 4 (вверх) / 5 (вниз), delta нет.
+        """
+        if event.num == 4:            # Linux: вверх
+            self._ext_canvas.yview_scroll(-1, "units")
+        elif event.num == 5:          # Linux: вниз
+            self._ext_canvas.yview_scroll(1, "units")
+        elif event.delta:             # Windows / macOS
+            # Нормализуем: на Windows delta = ±120 за "щелчок".
+            step = -1 if event.delta > 0 else 1
+            self._ext_canvas.yview_scroll(step, "units")
+        return "break"   # не пускаем событие дальше (чужие прокрутки)
 
     def _collect_active_extensions(self) -> set[str]:
         return {ext for ext, var in self._ext_vars.items() if var.get()}
