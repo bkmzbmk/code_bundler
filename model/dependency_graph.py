@@ -18,7 +18,12 @@ from collections import deque
 
 from model.file_node import FileNode
 from model.file_reader import read_text
+
 from model.analyzers.analyzer_registry import AnalyzerRegistry
+
+# Расширения заголовков и исходников C/C++ для поиска "парных" файлов.
+_CPP_HEADER_EXTS = {".h", ".hpp", ".hxx", ".hh"}
+_CPP_SOURCE_EXTS = {".cpp", ".cc", ".cxx", ".c"}
 
 
 class DependencyGraph:
@@ -116,6 +121,13 @@ class DependencyGraph:
             target = self._resolve_raw(abs_path, raw, ext)
             if target is not None:
                 resolved.add(target)
+                # C/C++: для заголовка подтягиваем парный исходник
+                # (engine.h -> engine.cpp). Связь по имени, не по include.
+                resolved.update(self._pair_sources_for(target))
+
+        # Если сам файл — заголовок, тоже добавим его парный исходник.
+        if ext in _CPP_HEADER_EXTS:
+            resolved.update(self._pair_sources_for(abs_path))
 
         self._edges[abs_path] = resolved
         return resolved
@@ -162,6 +174,38 @@ class DependencyGraph:
             return matches[0]
 
         return None
+
+    def _pair_sources_for(self, header_abs: str) -> set[str]:
+        """Находит парные .cpp/.cc/... для заголовка .h/.hpp/...
+
+        Связь header<->source в C++ выражается только именем файла
+        (engine.h + engine.cpp), а не через #include. Поэтому ищем
+        файлы с тем же именем и исходным расширением.
+
+        Приоритет — файл в ТОЙ ЖЕ папке, что и заголовок. Если там
+        нет, берём совпадения по имени в любом месте проекта."""
+        ext = os.path.splitext(header_abs)[1].lower()
+        if ext not in _CPP_HEADER_EXTS:
+            return set()
+
+        stem = os.path.splitext(os.path.basename(header_abs))[0].lower()
+        header_dir = os.path.normcase(os.path.dirname(header_abs))
+
+        same_dir: set[str] = set()
+        anywhere: set[str] = set()
+
+        for src_ext in _CPP_SOURCE_EXTS:
+            candidate_name = stem + src_ext          # "engine.cpp"
+            for match in self._by_basename.get(candidate_name, []):
+                match_dir = os.path.normcase(os.path.dirname(match))
+                if match_dir == header_dir:
+                    same_dir.add(match)
+                else:
+                    anywhere.add(match)
+
+        # Предпочитаем файлы из той же папки; иначе — где нашли.
+        return same_dir if same_dir else anywhere
+
 
     # ---- Python ----
     def _resolve_python(self, from_file: str, mod: str) -> str | None:

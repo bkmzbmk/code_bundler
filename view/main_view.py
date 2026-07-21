@@ -348,7 +348,7 @@ class MainView(tk.Frame, IView):
         обрабатывает вложенные (папки -> файлы)."""
         for item in self._tree.get_children(""):
             self._set_item_state(item, state)
-            
+
     def _set_item_state(self, item: str, state: bool) -> None:
         node = self._node_by_item.get(item)
         self._checked[item] = state

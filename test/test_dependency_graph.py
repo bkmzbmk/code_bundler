@@ -133,3 +133,64 @@ def test_get_edges(tmp_path):
     a_abs = os.path.abspath(str(tmp_path / "a.cpp"))
     assert a_abs in edges
     assert any(os.path.basename(t) == "b.h" for t in edges[a_abs])
+
+def test_cpp_header_pulls_paired_source(tmp_path):
+    """engine.h должен тянуть engine.cpp (связь по имени)."""
+    (tmp_path / "engine.h").write_text("#pragma once\n", encoding="utf-8")
+    (tmp_path / "engine.cpp").write_text(
+        '#include "engine.h"\n', encoding="utf-8"
+    )
+    (tmp_path / "main.cpp").write_text(
+        '#include "engine.h"\nint main(){}\n', encoding="utf-8"
+    )
+
+    from model.app_model import AppModel
+    m = AppModel()
+    m.load_project(str(tmp_path))
+
+    resolved = m.resolve_dependencies(["main.cpp"], max_depth=1)
+    assert "main.cpp" in resolved
+    assert "engine.h" in resolved
+    assert "engine.cpp" in resolved   # парный исходник подтянулся
+
+
+def test_cpp_paired_source_prefers_same_dir(tmp_path):
+    """При нескольких engine.cpp берём тот, что рядом с engine.h."""
+    (tmp_path / "core").mkdir()
+    (tmp_path / "other").mkdir()
+    (tmp_path / "core" / "engine.h").write_text(
+        "#pragma once\n", encoding="utf-8"
+    )
+    (tmp_path / "core" / "engine.cpp").write_text(
+        '#include "engine.h"\n', encoding="utf-8"
+    )
+    (tmp_path / "other" / "engine.cpp").write_text(
+        "// unrelated\n", encoding="utf-8"
+    )
+    (tmp_path / "main.cpp").write_text(
+        '#include "core/engine.h"\n', encoding="utf-8"
+    )
+
+    from model.app_model import AppModel
+    m = AppModel()
+    m.load_project(str(tmp_path))
+
+    resolved = m.resolve_dependencies(["main.cpp"], max_depth=1)
+    assert "core/engine.cpp" in resolved
+    assert "other/engine.cpp" not in resolved   # не из той папки
+
+
+def test_header_without_source_ok(tmp_path):
+    """Заголовок без парного .cpp не ломает разрешение."""
+    (tmp_path / "iface.h").write_text("#pragma once\n", encoding="utf-8")
+    (tmp_path / "main.cpp").write_text(
+        '#include "iface.h"\n', encoding="utf-8"
+    )
+
+    from model.app_model import AppModel
+    m = AppModel()
+    m.load_project(str(tmp_path))
+
+    resolved = m.resolve_dependencies(["main.cpp"], max_depth=1)
+    assert "iface.h" in resolved
+    assert "main.cpp" in resolved   # без .cpp у iface — не падаем
