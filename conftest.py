@@ -22,14 +22,21 @@ if not _has_display():
 
 @pytest.fixture(autouse=True)
 def _isolate_history(tmp_path, monkeypatch):
-    """Каждый тест использует свой временный файл истории.
+    """Каждый тест использует свои временные файлы истории и
+    исключённых папок.
 
-    Патчим config.HISTORY_FILE И уже импортированную ссылку в
-    model.app_model (т.к. AppModel импортировал HISTORY_FILE по
-    значению)."""
+    Патчим значения в config И уже импортированные ссылки в
+    model.app_model (импорт был по значению)."""
     hist = str(tmp_path / "history_isolated.json")
+    excl = str(tmp_path / "excluded_isolated.json")
+
     monkeypatch.setattr("config.HISTORY_FILE", hist, raising=False)
     monkeypatch.setattr(
         "model.app_model.HISTORY_FILE", hist, raising=False
+    )
+
+    monkeypatch.setattr("config.EXCLUDED_DIRS_FILE", excl, raising=False)
+    monkeypatch.setattr(
+        "model.app_model.EXCLUDED_DIRS_FILE", excl, raising=False
     )
     yield

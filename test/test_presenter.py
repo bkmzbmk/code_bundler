@@ -28,6 +28,7 @@ class FakeView(IView):
         self.clipboard = None
         self.save_path_to_return = None
         self.saved = None
+        self.excluded_shown = None
 
     # --- регистрация колбэков ---
     def set_on_choose_folder(self, cb): self.callbacks["choose"] = cb
@@ -70,6 +71,11 @@ class FakeView(IView):
     def ask_save_path(self, default_name):
         return self.save_path_to_return
     # если в твоём IView save-метод называется иначе — поправь
+
+    def set_on_exclude_dir(self, cb): self.callbacks["exclude"] = cb
+    def set_on_include_dir(self, cb): self.callbacks["include"] = cb
+    def show_excluded_dirs(self, excluded):
+        self.excluded_shown = list(excluded)
 
 
 @pytest.fixture

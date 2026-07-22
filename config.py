@@ -46,3 +46,10 @@ HISTORY_FILE = os.path.join(
     ".code_bundler_history.json",
 )
 HISTORY_MAX_ITEMS = 20
+
+# --- Пользовательские исключённые папки (относительные пути) ---
+# Храним рядом с приложением, ключ = абсолютный путь корня проекта.
+EXCLUDED_DIRS_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    ".code_bundler_excluded.json",
+)

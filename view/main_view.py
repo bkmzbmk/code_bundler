@@ -26,6 +26,10 @@ class MainView(tk.Frame, IView):
         self._on_copy: Callable[[], None] | None = None
         self._on_save_to_file: Callable[[], None] | None = None
 
+        self._on_exclude_dir: Callable[[str], None] | None = None
+        self._on_include_dir: Callable[[str], None] | None = None
+        self._excluded_dirs: list[str] = []
+
         self._on_history_open: Callable[[str], None] | None = None
         # Индекс строки Listbox -> абсолютный путь папки
         self._history_paths: list[str] = []
@@ -110,6 +114,26 @@ class MainView(tk.Frame, IView):
         ext_inner = tk.Frame(ext_frame)
         ext_inner.pack(fill="both", expand=True, padx=3, pady=3)
 
+        # --- Исключённые папки ---
+        excl_frame = tk.LabelFrame(
+            left, text="Исключённые папки (двойной клик — вернуть)"
+        )
+        excl_frame.pack(fill="x", pady=(5, 0))
+
+        excl_inner = tk.Frame(excl_frame)
+        excl_inner.pack(fill="x", padx=3, pady=3)
+
+        self._excluded_list = tk.Listbox(excl_inner, height=4,
+                                         activestyle="dotbox")
+        excl_scroll = ttk.Scrollbar(excl_inner, orient="vertical",
+                                    command=self._excluded_list.yview)
+        self._excluded_list.configure(yscrollcommand=excl_scroll.set)
+        self._excluded_list.pack(side="left", fill="x", expand=True)
+        excl_scroll.pack(side="right", fill="y")
+        self._excluded_list.bind("<Double-Button-1>",
+                                 self._on_excluded_double_click)
+
+
         # Canvas + Scrollbar для прокрутки чекбоксов расширений
         self._ext_canvas = tk.Canvas(ext_inner, height=110,
                                      highlightthickness=0)
@@ -148,6 +172,18 @@ class MainView(tk.Frame, IView):
         self._tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
         self._tree.bind("<Button-1>", self._on_tree_click)
+
+        # Правый клик по папке -> контекстное меню "Исключить"
+        # (Button-3 на Windows/Linux, Button-2 на части macOS)
+        self._tree.bind("<Button-3>", self._on_tree_right_click)
+        self._tree.bind("<Button-2>", self._on_tree_right_click)
+
+        self._tree_menu = tk.Menu(self, tearoff=0)
+        self._tree_menu.add_command(
+            label="Исключить папку из анализа",
+            command=self._exclude_selected_dir,
+        )
+        self._menu_target_item: str | None = None
 
         # === Правая панель ===
         right = tk.Frame(paned)
@@ -280,6 +316,43 @@ class MainView(tk.Frame, IView):
         # Иначе — это клик по чекбоксу/имени: переключаем отметку.
         self._toggle_item(item)
         return "break"
+
+    def _on_tree_right_click(self, event: tk.Event) -> None:
+        """ПКМ по дереву: если попали на папку — показать меню."""
+        item = self._tree.identify_row(event.y)
+        if not item:
+            return
+        node = self._node_by_item.get(item)
+        if node is None or not node.is_dir:
+            return   # меню только для папок
+        self._menu_target_item = item
+        try:
+            self._tree_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self._tree_menu.grab_release()
+
+    def _exclude_selected_dir(self) -> None:
+        """Пункт меню 'Исключить папку'."""
+        item = self._menu_target_item
+        if item is None:
+            return
+        node = self._node_by_item.get(item)
+        if node is None or not node.is_dir:
+            return
+        rel = node.rel_path.replace("\\", "/")
+        if self._on_exclude_dir and rel:
+            self._on_exclude_dir(rel)
+
+    def _on_excluded_double_click(self, _event: tk.Event) -> None:
+        """Двойной клик по исключённой папке — вернуть её."""
+        selection = self._excluded_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if 0 <= index < len(self._excluded_dirs):
+            rel = self._excluded_dirs[index]
+            if self._on_include_dir:
+                self._on_include_dir(rel)
 
     def _select_all_clicked(self) -> None:
         self._set_all_items(True)
@@ -551,3 +624,16 @@ class MainView(tk.Frame, IView):
         self._history_list.delete(0, "end")
         for path in self._history_paths:
             self._history_list.insert("end", path)
+
+    # --- исключённые папки ---
+    def set_on_exclude_dir(self, callback: Callable[[str], None]) -> None:
+        self._on_exclude_dir = callback
+
+    def set_on_include_dir(self, callback: Callable[[str], None]) -> None:
+        self._on_include_dir = callback
+
+    def show_excluded_dirs(self, excluded: list[str]) -> None:
+        self._excluded_dirs = list(excluded)
+        self._excluded_list.delete(0, "end")
+        for rel in self._excluded_dirs:
+            self._excluded_list.insert("end", rel)

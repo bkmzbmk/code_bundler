@@ -10,7 +10,9 @@ import os
 from config import (
     DEFAULT_IGNORE, CODE_EXTENSIONS, DEFAULT_TOKEN_LIMIT,
     HISTORY_FILE, HISTORY_MAX_ITEMS, DEFAULT_ACTIVE_EXTENSIONS,
+    EXCLUDED_DIRS_FILE,
 )
+from model.excluded_dirs_store import ExcludedDirsStore
 from model.folder_history import FolderHistory
 from model.file_node import FileNode
 from model.ignore_rules import IgnoreRules
@@ -48,6 +50,9 @@ class AppModel:
         # История открытых папок (персистентная)
         self._history = FolderHistory(HISTORY_FILE, HISTORY_MAX_ITEMS)
 
+        # Хранилище исключённых папок (персистентное, по проектам)
+        self._excluded_store = ExcludedDirsStore(EXCLUDED_DIRS_FILE)
+
         # Реестр анализаторов (расширяемо: добавить язык — register)
         self._registry = AnalyzerRegistry()
         self._registry.register(CppAnalyzer())
@@ -66,15 +71,16 @@ class AppModel:
     # ------------------------------------------------------------------
     # Проект
     # ------------------------------------------------------------------
-
     def load_project(self, root_path: str) -> FileNode:
         """Сканирует папку, строит дерево и граф зависимостей."""
         self._root_path = os.path.abspath(root_path)
 
+        # Восстанавливаем исключённые папки для этого проекта.
+        excluded = self._excluded_store.get(self._root_path)
+        self._ignore.set_excluded_dirs(excluded)
+
         # Собираем ВСЕ расширения проекта (для предложения в GUI).
         found = self._scanner.collect_extensions(self._root_path)
-        # Дефолтные расширения всегда присутствуют в списке выбора,
-        # даже если в проекте их нет (чтобы можно было отметить).
         self._all_extensions = set(found) | {
             e.lower() for e in DEFAULT_ACTIVE_EXTENSIONS
         }
@@ -85,6 +91,7 @@ class AppModel:
         self._graph = DependencyGraph(self._root_node, self._registry)
         self._history.add(self._root_path)
         return self._root_node
+
 
     def get_root_node(self) -> FileNode | None:
         return self._root_node
@@ -126,6 +133,37 @@ class AppModel:
         if self._root_path is None:
             return None
         # Пересканируем дерево и перестроим граф под новый фильтр.
+        self._scanner.set_extensions(self._active_extensions)
+        self._root_node = self._scanner.scan(self._root_path)
+        self._graph = DependencyGraph(self._root_node, self._registry)
+        return self._root_node
+
+    # ------------------------------------------------------------------
+    # Исключённые папки
+    # ------------------------------------------------------------------
+    def get_excluded_dirs(self) -> list[str]:
+        """Отсортированный список исключённых папок (относит. пути)."""
+        return sorted(self._ignore.get_excluded_dirs())
+
+    def exclude_dir(self, rel_dir: str) -> FileNode | None:
+        """Исключить папку (и всё содержимое) и пересканировать."""
+        self._ignore.add_excluded_dir(rel_dir)
+        return self._apply_excluded_change()
+
+    def include_dir(self, rel_dir: str) -> FileNode | None:
+        """Вернуть ранее исключённую папку и пересканировать."""
+        self._ignore.remove_excluded_dir(rel_dir)
+        return self._apply_excluded_change()
+
+    def _apply_excluded_change(self) -> FileNode | None:
+        """Сохранить исключения проекта и пересканировать дерево."""
+        if self._root_path is None:
+            return None
+        # Сохраняем для текущего проекта.
+        self._excluded_store.set(
+            self._root_path, self._ignore.get_excluded_dirs()
+        )
+        # Пересканируем дерево и перестроим граф.
         self._scanner.set_extensions(self._active_extensions)
         self._root_node = self._scanner.scan(self._root_path)
         self._graph = DependencyGraph(self._root_node, self._registry)

@@ -53,3 +53,29 @@ def test_is_ignored_rel_builtin_priority():
     # встроенный паттерн срабатывает даже без gitignore
     rules = IgnoreRules({".git"})
     assert rules.is_ignored_rel("/p/.git", ".git", True) is True
+
+def test_excluded_dir_and_content():
+    rules = IgnoreRules(set())
+    rules.set_excluded_dirs({"src/tests"})
+    # сама папка
+    assert rules.is_ignored_rel("/p/src/tests", "src/tests", True) is True
+    # содержимое
+    assert rules.is_ignored_rel(
+        "/p/src/tests/t.py", "src/tests/t.py", False
+    ) is True
+    # соседняя папка не задета
+    assert rules.is_ignored_rel("/p/src/app", "src/app", True) is False
+
+
+def test_add_remove_excluded_dir():
+    rules = IgnoreRules(set())
+    rules.add_excluded_dir("build2")
+    assert "build2" in rules.get_excluded_dirs()
+    rules.remove_excluded_dir("build2")
+    assert "build2" not in rules.get_excluded_dirs()
+
+
+def test_excluded_dir_normalizes_separators():
+    rules = IgnoreRules(set())
+    rules.add_excluded_dir("a\\b\\")   # backslash + хвостовой слэш
+    assert rules.is_ignored_rel("/p/a/b", "a/b", True) is True

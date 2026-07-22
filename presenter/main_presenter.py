@@ -19,6 +19,7 @@ class MainPresenter:
         # Показать историю недавних папок при запуске
         self._refresh_history()
         self._refresh_extensions()   # показать дефолтные расширения сразу
+        self._refresh_excluded()
         self._view.set_on_save_to_file(self.on_save_to_file)
 
     def _bind_events(self) -> None:
@@ -28,6 +29,8 @@ class MainPresenter:
         self._view.set_on_copy(self.on_copy)
         self._view.set_on_history_open(self.on_history_open)
         self._view.set_on_extensions_changed(self.on_extensions_changed)
+        self._view.set_on_exclude_dir(self.on_exclude_dir)
+        self._view.set_on_include_dir(self.on_include_dir)
 
     # ------------------------------------------------------------------
     def on_choose_folder(self, path: str) -> None:
@@ -36,6 +39,7 @@ class MainPresenter:
             root = self._model.load_project(path)
             self._view.show_tree(root)
             self._refresh_extensions()   # <-- показать расширения проекта
+            self._refresh_excluded()
             file_count = sum(1 for _ in root.iter_files())
             self._view.show_status(
                 f"Проект загружен. Файлов кода: {file_count}"
@@ -170,3 +174,40 @@ class MainPresenter:
         except OSError as e:
             self._view.show_error(f"Не удалось сохранить файл:\n{e}")
             self._view.show_status("Ошибка сохранения")
+
+    # ------------------------------------------------------------------
+    def on_exclude_dir(self, rel_dir: str) -> None:
+        """Исключить папку из анализа и перерисовать дерево."""
+        try:
+            self._view.show_status(f"Исключаю папку: {rel_dir}")
+            root = self._model.exclude_dir(rel_dir)
+            if root is not None:
+                self._view.show_tree(root)
+                self._refresh_excluded()
+                file_count = sum(1 for _ in root.iter_files())
+                self._view.show_status(
+                    f"Папка исключена. Файлов: {file_count}"
+                )
+            else:
+                self._view.show_status("Проект не загружен")
+        except Exception as e:  # noqa: BLE001
+            self._view.show_error(f"Ошибка исключения папки:\n{e}")
+
+    def on_include_dir(self, rel_dir: str) -> None:
+        """Вернуть ранее исключённую папку и перерисовать дерево."""
+        try:
+            self._view.show_status(f"Возвращаю папку: {rel_dir}")
+            root = self._model.include_dir(rel_dir)
+            if root is not None:
+                self._view.show_tree(root)
+                self._refresh_excluded()
+                file_count = sum(1 for _ in root.iter_files())
+                self._view.show_status(
+                    f"Папка возвращена. Файлов: {file_count}"
+                )
+        except Exception as e:  # noqa: BLE001
+            self._view.show_error(f"Ошибка возврата папки:\n{e}")
+
+    def _refresh_excluded(self) -> None:
+        """Обновить список исключённых папок в View."""
+        self._view.show_excluded_dirs(self._model.get_excluded_dirs())

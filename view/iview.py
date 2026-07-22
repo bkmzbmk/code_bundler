@@ -125,3 +125,19 @@ class IView(ABC):
             Выбранный путь или None, если пользователь отменил.
         """
         raise NotImplementedError
+
+    # --- Исключённые папки ---
+    @abstractmethod
+    def set_on_exclude_dir(self, callback: Callable[[str], None]) -> None:
+        """callback(rel_dir) — пользователь исключает папку из анализа."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_on_include_dir(self, callback: Callable[[str], None]) -> None:
+        """callback(rel_dir) — пользователь возвращает папку."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def show_excluded_dirs(self, excluded: list[str]) -> None:
+        """Отобразить список исключённых папок."""
+        raise NotImplementedError
